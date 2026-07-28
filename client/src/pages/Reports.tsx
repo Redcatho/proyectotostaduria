@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import * as XLSX from "xlsx";
 import { api, EntryWithVariety, BatchWithVariety, Variety } from "../api";
 import LoadingSpinner from "../components/LoadingSpinner";
 
@@ -10,51 +11,146 @@ export default function Reports() {
   const [error, setError] = useState("");
   const [filters, setFilters] = useState({ varietyId: 0, from: "", to: "" });
 
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      try {
-        const params: any = {};
-        if (filters.varietyId) params.varietyId = filters.varietyId;
-        if (filters.from) params.from = filters.from;
-        if (filters.to) params.to = filters.to;
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params: any = {};
+      if (filters.varietyId) params.varietyId = filters.varietyId;
+      if (filters.from) params.from = filters.from;
+      if (filters.to) params.to = filters.to;
 
-        const [e, b, v] = await Promise.all([
-          api.entries.list(params),
-          api.batches.list(params),
-          api.varieties.list(),
-        ]);
-        setEntries(e);
-        setBatches(b);
-        setVarieties(v);
-      } catch (err: any) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
+      const [e, b, v] = await Promise.all([
+        api.entries.list(params),
+        api.batches.list(params),
+        api.varieties.list(),
+      ]);
+      setEntries(e);
+      setBatches(b);
+      setVarieties(v);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   }, [filters.varietyId, filters.from, filters.to]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const exportExcel = () => {
+    const wb = XLSX.utils.book_new();
+
+    const consRows: (string | number)[][] = [
+      ["Tipo", "Fecha", "Variedad", "Kilos Verde", "Kilos Tostado", "Merma (kg)", "Merma (%)", "Detalles"],
+    ];
+    combined.forEach((item) => {
+      const isEntry = item.type === "Ingreso";
+      const entry = item as EntryWithVariety;
+      const batch = item as BatchWithVariety;
+      consRows.push([
+        isEntry ? "Ingreso" : "Tostado",
+        isEntry ? entry.entryDate : batch.batchDate,
+        item.varietyName || "",
+        isEntry ? entry.kilos : batch.greenKilos,
+        isEntry ? "" : batch.roastedKilos,
+        isEntry ? "" : batch.mermaKg,
+        isEntry ? "" : `${batch.mermaPct}%`,
+        isEntry
+          ? [entry.supplier, entry.notes].filter(Boolean).join(" - ")
+          : (batch.notes || ""),
+      ]);
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(consRows), "Consolidado");
+
+    const entryRows: (string | number)[][] = [
+      ["Fecha", "Variedad", "Kilos (kg)", "Proveedor", "Notas"],
+    ];
+    entries.forEach((e) => {
+      entryRows.push([e.entryDate, e.varietyName || "", e.kilos, e.supplier || "", e.notes || ""]);
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(entryRows), "Ingresos");
+
+    const batchRows: (string | number)[][] = [
+      ["Fecha", "Variedad", "Verde (kg)", "Tostado (kg)", "Merma (kg)", "Merma (%)", "Notas"],
+    ];
+    batches.forEach((b) => {
+      batchRows.push([b.batchDate, b.varietyName || "", b.greenKilos, b.roastedKilos, b.mermaKg, `${b.mermaPct}%`, b.notes || ""]);
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(batchRows), "Tostado");
+
+    const totalGreenIn = entries.reduce((s, e) => s + e.kilos, 0);
+    const totalGreenUsed = batches.reduce((s, b) => s + b.greenKilos, 0);
+    const totalRoasted = batches.reduce((s, b) => s + b.roastedKilos, 0);
+    const totalMermaKg = Math.round((totalGreenUsed - totalRoasted) * 100) / 100;
+    const totalMermaPct = totalGreenUsed > 0 ? Math.round(((totalGreenUsed - totalRoasted) / totalGreenUsed) * 10000) / 100 : 0;
+
+    const resRows: (string | number)[][] = [
+      ["RESUMEN GENERAL"],
+      ["Métrica", "Valor"],
+      ["Total Café Verde Ingresado", totalGreenIn],
+      ["Total Café Verde Usado", totalGreenUsed],
+      ["Total Café Tostado Obtenido", totalRoasted],
+      ["Merma Total (kg)", totalMermaKg],
+      ["Merma Promedio (%)", totalMermaPct],
+      [""],
+      ["DESGLOSE POR VARIEDAD"],
+      ["Variedad", "Verde Ingresado", "Verde Usado", "Disponible", "Tostado", "Merma (kg)", "Merma (%)"],
+    ];
+
+    const varietyMap = new Map(varieties.map((v) => [v.id, v.name]));
+    const byVariety: Record<number, { greenIn: number; greenUsed: number; roasted: number }> = {};
+    entries.forEach((e) => {
+      if (!byVariety[e.varietyId]) byVariety[e.varietyId] = { greenIn: 0, greenUsed: 0, roasted: 0 };
+      byVariety[e.varietyId].greenIn += e.kilos;
+    });
+    batches.forEach((b) => {
+      if (!byVariety[b.varietyId]) byVariety[b.varietyId] = { greenIn: 0, greenUsed: 0, roasted: 0 };
+      byVariety[b.varietyId].greenUsed += b.greenKilos;
+      byVariety[b.varietyId].roasted += b.roastedKilos;
+    });
+
+    Object.entries(byVariety).forEach(([id, data]) => {
+      const name = varietyMap.get(Number(id)) || "Desconocida";
+      const available = Math.round((data.greenIn - data.greenUsed) * 100) / 100;
+      const mermaKg = Math.round((data.greenUsed - data.roasted) * 100) / 100;
+      const mermaPct = data.greenUsed > 0 ? Math.round(((data.greenUsed - data.roasted) / data.greenUsed) * 10000) / 100 : 0;
+      resRows.push([name, data.greenIn, data.greenUsed, available, data.roasted, mermaKg, `${mermaPct}%`]);
+    });
+
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(resRows), "Resumen");
+
+    XLSX.writeFile(wb, `reporte-tostaduria-${new Date().toISOString().split("T")[0]}.xlsx`);
+  };
 
   const exportCSV = () => {
     const rows: string[][] = [
-      ["Tipo", "Fecha", "Variedad", "Kilos Verde", "Kilos Tostado", "Merma (kg)", "Merma %", "Proveedor/Notas", "Notas"],
+      ["Tipo", "Fecha", "Variedad", "Kilos Verde", "Kilos Tostado", "Merma (kg)", "Merma %", "Detalles"],
     ];
-    entries.forEach((e) => rows.push([
-      "Ingreso", e.entryDate, e.varietyName || "", String(e.kilos), "", "", "", e.supplier || "", e.notes || "",
-    ]));
-    batches.forEach((b) => rows.push([
-      "Tostado", b.batchDate, b.varietyName || "", String(b.greenKilos), String(b.roastedKilos),
-      String(b.mermaKg), String(b.mermaPct) + "%", "", b.notes || "",
-    ]));
-    const csv = rows.map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(",")).join("\n");
+    combined.forEach((item) => {
+      const isEntry = item.type === "Ingreso";
+      const entry = item as EntryWithVariety;
+      const batch = item as BatchWithVariety;
+      rows.push([
+        isEntry ? "Ingreso" : "Tostado",
+        isEntry ? entry.entryDate : batch.batchDate,
+        item.varietyName || "",
+        isEntry ? String(entry.kilos) : String(batch.greenKilos),
+        isEntry ? "" : String(batch.roastedKilos),
+        isEntry ? "" : String(batch.mermaKg),
+        isEntry ? "" : `${batch.mermaPct}%`,
+        isEntry
+          ? [entry.supplier, entry.notes].filter(Boolean).join(" - ")
+          : (batch.notes || ""),
+      ]);
+    });
+    const csv = rows.map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(",")).join("\r\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
     a.download = `reporte-tostaduria-${new Date().toISOString().split("T")[0]}.csv`;
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    document.body.removeChild(a);
   };
 
   if (loading) return <LoadingSpinner />;
@@ -62,15 +158,24 @@ export default function Reports() {
   const combined = [
     ...entries.map((e) => ({ ...e, type: "Ingreso" as const })),
     ...batches.map((b) => ({ ...b, type: "Tostado" as const })),
-  ].sort((a, b) => new Date(b.type === "Ingreso" ? b.entryDate : b.batchDate).getTime() - new Date(a.type === "Ingreso" ? a.entryDate : a.batchDate).getTime());
+  ].sort((a, b) => {
+    const da = a.type === "Ingreso" ? (a as EntryWithVariety).entryDate : (a as BatchWithVariety).batchDate;
+    const db = b.type === "Ingreso" ? (b as EntryWithVariety).entryDate : (b as BatchWithVariety).batchDate;
+    return new Date(db).getTime() - new Date(da).getTime();
+  });
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold text-gray-800">Reportes</h2>
-        <button onClick={exportCSV} className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors">
-          Exportar CSV
-        </button>
+        <div className="flex gap-2">
+          <button onClick={exportCSV} className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors">
+            Exportar CSV
+          </button>
+          <button onClick={exportExcel} className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors">
+            Exportar Excel
+          </button>
+        </div>
       </div>
 
       {error && <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm">{error}</div>}
