@@ -1,0 +1,30 @@
+import express from "express";
+import cors from "cors";
+import { initDatabase } from "./db/index.js";
+import varietiesRouter from "./routes/varieties.js";
+import entriesRouter from "./routes/entries.js";
+import batchesRouter from "./routes/batches.js";
+import inventoryRouter from "./routes/inventory.js";
+import dashboardRouter from "./routes/dashboard.js";
+
+const app = express();
+const PORT = process.env.PORT || 3001;
+
+app.use(cors());
+app.use(express.json());
+
+initDatabase();
+
+app.use("/api/varieties", varietiesRouter);
+app.use("/api/entries", entriesRouter);
+app.use("/api/batches", batchesRouter);
+app.use("/api/inventory", inventoryRouter);
+app.use("/api/dashboard", dashboardRouter);
+
+app.get("/api/health", (_req, res) => {
+  res.json({ status: "ok" });
+});
+
+app.listen(PORT, () => {
+  console.log(`Servidor corriendo en http://localhost:${PORT}`);
+});
