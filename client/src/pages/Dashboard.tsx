@@ -4,7 +4,6 @@ import SummaryCard from "../components/SummaryCard";
 import LoadingSpinner from "../components/LoadingSpinner";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
-  LineChart, Line,
 } from "recharts";
 
 export default function Dashboard() {

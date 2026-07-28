@@ -10,30 +10,31 @@ export default function Reports() {
   const [error, setError] = useState("");
   const [filters, setFilters] = useState({ varietyId: 0, from: "", to: "" });
 
-  const load = async () => {
-    setLoading(true);
-    try {
-      const params: any = {};
-      if (filters.varietyId) params.varietyId = filters.varietyId;
-      if (filters.from) params.from = filters.from;
-      if (filters.to) params.to = filters.to;
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      try {
+        const params: any = {};
+        if (filters.varietyId) params.varietyId = filters.varietyId;
+        if (filters.from) params.from = filters.from;
+        if (filters.to) params.to = filters.to;
 
-      const [e, b, v] = await Promise.all([
-        api.entries.list(params),
-        api.batches.list(params),
-        api.varieties.list(),
-      ]);
-      setEntries(e);
-      setBatches(b);
-      setVarieties(v);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(load, [filters.varietyId, filters.from, filters.to]);
+        const [e, b, v] = await Promise.all([
+          api.entries.list(params),
+          api.batches.list(params),
+          api.varieties.list(),
+        ]);
+        setEntries(e);
+        setBatches(b);
+        setVarieties(v);
+      } catch (err: any) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [filters.varietyId, filters.from, filters.to]);
 
   const exportCSV = () => {
     const rows: string[][] = [

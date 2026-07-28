@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { api, EntryWithVariety, EntryInput, Variety } from "../api";
 import LoadingSpinner from "../components/LoadingSpinner";
 
@@ -10,7 +10,7 @@ export default function GreenCoffee() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<EntryInput>({ varietyId: 0, kilos: 0, supplier: "", entryDate: new Date().toISOString().split("T")[0], notes: "" });
 
-  const load = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const [e, v] = await Promise.all([api.entries.list(), api.varieties.list()]);
@@ -21,9 +21,9 @@ export default function GreenCoffee() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  useEffect(load, []);
+  useEffect(() => { loadData(); }, [loadData]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,7 +32,7 @@ export default function GreenCoffee() {
       await api.entries.create(form);
       setShowForm(false);
       setForm({ varietyId: 0, kilos: 0, supplier: "", entryDate: new Date().toISOString().split("T")[0], notes: "" });
-      load();
+      loadData();
     } catch (err: any) {
       setError(err.message);
     }
@@ -42,7 +42,7 @@ export default function GreenCoffee() {
     if (!confirm("¿Eliminar este ingreso?")) return;
     try {
       await api.entries.delete(id);
-      load();
+      loadData();
     } catch (err: any) {
       setError(err.message);
     }

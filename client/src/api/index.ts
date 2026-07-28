@@ -40,7 +40,7 @@ export const api = {
       if (params?.to) qs.set("to", params.to);
       return request<BatchWithVariety[]>(`/batches?${qs.toString()}`);
     },
-    create: (data: BatchInput) => request<Batch>(`/batches`, { method: "POST", body: JSON.stringify(data) }),
+    create: (data: BatchInput) => request<RoastingBatch>(`/batches`, { method: "POST", body: JSON.stringify(data) }),
     delete: (id: number) => request<{ message: string }>(`/batches/${id}`, { method: "DELETE" }),
   },
   inventory: {

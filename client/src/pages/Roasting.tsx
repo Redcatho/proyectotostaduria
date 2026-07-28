@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { api, BatchWithVariety, BatchInput, Variety } from "../api";
 import LoadingSpinner from "../components/LoadingSpinner";
 
@@ -11,7 +11,7 @@ export default function Roasting() {
   const [form, setForm] = useState<BatchInput>({ varietyId: 0, greenKilos: 0, roastedKilos: 0, batchDate: new Date().toISOString().split("T")[0], notes: "" });
   const [calculatedMerma, setCalculatedMerma] = useState({ kg: 0, pct: 0 });
 
-  const load = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const [b, v] = await Promise.all([api.batches.list(), api.varieties.list()]);
@@ -22,9 +22,9 @@ export default function Roasting() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  useEffect(load, []);
+  useEffect(() => { loadData(); }, [loadData]);
 
   useEffect(() => {
     if (form.greenKilos > 0) {
@@ -43,7 +43,7 @@ export default function Roasting() {
       await api.batches.create(form);
       setShowForm(false);
       setForm({ varietyId: 0, greenKilos: 0, roastedKilos: 0, batchDate: new Date().toISOString().split("T")[0], notes: "" });
-      load();
+      loadData();
     } catch (err: any) {
       setError(err.message);
     }
@@ -53,7 +53,7 @@ export default function Roasting() {
     if (!confirm("¿Eliminar esta tanda?")) return;
     try {
       await api.batches.delete(id);
-      load();
+      loadData();
     } catch (err: any) {
       setError(err.message);
     }
