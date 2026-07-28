@@ -11,7 +11,7 @@ const dbPath = join(dataDir, "tostaduria.db");
 
 mkdirSync(dataDir, { recursive: true });
 
-export let sqlJs: SqlJsDatabase;
+export let sqlJs!: SqlJsDatabase;
 
 async function getDatabase() {
   const SQL = await initSqlJs();
