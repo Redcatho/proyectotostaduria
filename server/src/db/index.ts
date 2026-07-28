@@ -1,6 +1,6 @@
 import initSqlJs, { Database as SqlJsDatabase } from "sql.js";
 import { drizzle } from "drizzle-orm/sql-js";
-import * as schema from "./schema";
+import * as schema from "./schema.js";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
