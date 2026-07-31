@@ -1,6 +1,16 @@
 import { useEffect, useState, useCallback } from "react";
-import { api, EntryWithVariety, EntryInput, Variety } from "../api";
+import { api, EntryWithVariety, Variety } from "../api";
 import LoadingSpinner from "../components/LoadingSpinner";
+
+type FormState = { varietyId: number; kilos: string; supplier: string; entryDate: string; notes: string };
+
+const initialForm = (): FormState => ({
+  varietyId: 0,
+  kilos: "",
+  supplier: "",
+  entryDate: new Date().toISOString().split("T")[0],
+  notes: "",
+});
 
 export default function GreenCoffee() {
   const [entries, setEntries] = useState<EntryWithVariety[]>([]);
@@ -8,7 +18,7 @@ export default function GreenCoffee() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState<EntryInput>({ varietyId: 0, kilos: 0, supplier: "", entryDate: new Date().toISOString().split("T")[0], notes: "" });
+  const [form, setForm] = useState<FormState>(initialForm);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -27,11 +37,11 @@ export default function GreenCoffee() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.varietyId || !form.kilos || !form.entryDate) return;
+    if (!form.varietyId || !form.kilos.trim() || !form.entryDate) return;
     try {
-      await api.entries.create(form);
+      await api.entries.create({ ...form, kilos: Number(form.kilos) });
       setShowForm(false);
-      setForm({ varietyId: 0, kilos: 0, supplier: "", entryDate: new Date().toISOString().split("T")[0], notes: "" });
+      setForm(initialForm());
       loadData();
     } catch (err: any) {
       setError(err.message);
@@ -116,7 +126,7 @@ export default function GreenCoffee() {
                   type="number" required min="0" step="0.01"
                   className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-amber-500 outline-none"
                   value={form.kilos}
-                  onChange={(e) => setForm({ ...form, kilos: Number(e.target.value) })}
+                  onChange={(e) => setForm({ ...form, kilos: e.target.value })}
                 />
               </div>
               <div>

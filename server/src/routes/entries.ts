@@ -25,7 +25,8 @@ router.get("/", (req: Request, res: Response) => {
     query = query.where(sql`${greenCoffeeEntries.entryDate} <= ${to}`);
   }
 
-  res.json(query.all());
+  const rows = query.all();
+  res.json(rows.map((r) => ({ ...r.entry, varietyName: r.varietyName })));
 });
 
 router.post("/", (req: Request, res: Response) => {

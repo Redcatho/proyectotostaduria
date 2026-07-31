@@ -1,6 +1,16 @@
 import { useEffect, useState, useCallback } from "react";
-import { api, BatchWithVariety, BatchInput, Variety } from "../api";
+import { api, BatchWithVariety, Variety } from "../api";
 import LoadingSpinner from "../components/LoadingSpinner";
+
+type FormState = { varietyId: number; greenKilos: string; roastedKilos: string; batchDate: string; notes: string };
+
+const initialForm = (): FormState => ({
+  varietyId: 0,
+  greenKilos: "",
+  roastedKilos: "",
+  batchDate: new Date().toISOString().split("T")[0],
+  notes: "",
+});
 
 export default function Roasting() {
   const [batches, setBatches] = useState<BatchWithVariety[]>([]);
@@ -8,7 +18,7 @@ export default function Roasting() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState<BatchInput>({ varietyId: 0, greenKilos: 0, roastedKilos: 0, batchDate: new Date().toISOString().split("T")[0], notes: "" });
+  const [form, setForm] = useState<FormState>(initialForm);
   const [calculatedMerma, setCalculatedMerma] = useState({ kg: 0, pct: 0 });
 
   const loadData = useCallback(async () => {
@@ -27,9 +37,11 @@ export default function Roasting() {
   useEffect(() => { loadData(); }, [loadData]);
 
   useEffect(() => {
-    if (form.greenKilos > 0) {
-      const kg = Math.round((form.greenKilos - form.roastedKilos) * 100) / 100;
-      const pct = Math.round((kg / form.greenKilos) * 100 * 100) / 100;
+    const green = Number(form.greenKilos);
+    const roasted = Number(form.roastedKilos);
+    if (green > 0) {
+      const kg = Math.round((green - roasted) * 100) / 100;
+      const pct = Math.round((kg / green) * 100 * 100) / 100;
       setCalculatedMerma({ kg, pct });
     } else {
       setCalculatedMerma({ kg: 0, pct: 0 });
@@ -38,11 +50,15 @@ export default function Roasting() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.varietyId || !form.greenKilos || !form.roastedKilos || !form.batchDate) return;
+    if (!form.varietyId || !form.greenKilos.trim() || !form.roastedKilos.trim() || !form.batchDate) return;
     try {
-      await api.batches.create(form);
+      await api.batches.create({
+        ...form,
+        greenKilos: Number(form.greenKilos),
+        roastedKilos: Number(form.roastedKilos),
+      });
       setShowForm(false);
-      setForm({ varietyId: 0, greenKilos: 0, roastedKilos: 0, batchDate: new Date().toISOString().split("T")[0], notes: "" });
+      setForm(initialForm());
       loadData();
     } catch (err: any) {
       setError(err.message);
@@ -130,7 +146,7 @@ export default function Roasting() {
                     type="number" required min="0" step="0.01"
                     className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-amber-500 outline-none"
                     value={form.greenKilos}
-                    onChange={(e) => setForm({ ...form, greenKilos: Number(e.target.value) })}
+                    onChange={(e) => setForm({ ...form, greenKilos: e.target.value })}
                   />
                 </div>
                 <div>
@@ -139,12 +155,12 @@ export default function Roasting() {
                     type="number" required min="0" step="0.01"
                     className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-amber-500 outline-none"
                     value={form.roastedKilos}
-                    onChange={(e) => setForm({ ...form, roastedKilos: Number(e.target.value) })}
+                    onChange={(e) => setForm({ ...form, roastedKilos: e.target.value })}
                   />
                 </div>
               </div>
 
-              {form.greenKilos > 0 && (
+              {Number(form.greenKilos) > 0 && (
                 <div className={`p-3 rounded-lg text-sm ${
                   calculatedMerma.pct > 20 ? "bg-red-50 text-red-700" : calculatedMerma.pct > 15 ? "bg-yellow-50 text-yellow-700" : "bg-green-50 text-green-700"
                 }`}>

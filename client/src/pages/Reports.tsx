@@ -39,7 +39,7 @@ export default function Reports() {
   const exportExcel = () => {
     const wb = XLSX.utils.book_new();
 
-    const consRows: (string | number)[][] = [
+    const consRows: (string | number | null)[][] = [
       ["Tipo", "Fecha", "Variedad", "Kilos Verde", "Kilos Tostado", "Merma (kg)", "Merma (%)", "Detalles"],
     ];
     combined.forEach((item) => {
@@ -49,33 +49,39 @@ export default function Reports() {
       consRows.push([
         isEntry ? "Ingreso" : "Tostado",
         isEntry ? entry.entryDate : batch.batchDate,
-        item.varietyName || "",
+        item.varietyName || null,
         isEntry ? entry.kilos : batch.greenKilos,
-        isEntry ? "" : batch.roastedKilos,
-        isEntry ? "" : batch.mermaKg,
-        isEntry ? "" : `${batch.mermaPct}%`,
+        isEntry ? null : batch.roastedKilos,
+        isEntry ? null : batch.mermaKg,
+        isEntry ? null : `${batch.mermaPct}%`,
         isEntry
-          ? [entry.supplier, entry.notes].filter(Boolean).join(" - ")
-          : (batch.notes || ""),
+          ? ([entry.supplier, entry.notes].filter(Boolean).join(" - ") || null)
+          : (batch.notes || null),
       ]);
     });
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(consRows), "Consolidado");
+    const consSheet = XLSX.utils.aoa_to_sheet(consRows);
+    consSheet["!cols"] = [{ wch: 8 }, { wch: 12 }, { wch: 20 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 30 }];
+    XLSX.utils.book_append_sheet(wb, consSheet, "Consolidado");
 
-    const entryRows: (string | number)[][] = [
+    const entryRows: (string | number | null)[][] = [
       ["Fecha", "Variedad", "Kilos (kg)", "Proveedor", "Notas"],
     ];
     entries.forEach((e) => {
-      entryRows.push([e.entryDate, e.varietyName || "", e.kilos, e.supplier || "", e.notes || ""]);
+      entryRows.push([e.entryDate, e.varietyName || null, e.kilos, e.supplier || null, e.notes || null]);
     });
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(entryRows), "Ingresos");
+    const entrySheet = XLSX.utils.aoa_to_sheet(entryRows);
+    entrySheet["!cols"] = [{ wch: 12 }, { wch: 20 }, { wch: 12 }, { wch: 20 }, { wch: 30 }];
+    XLSX.utils.book_append_sheet(wb, entrySheet, "Ingresos");
 
-    const batchRows: (string | number)[][] = [
+    const batchRows: (string | number | null)[][] = [
       ["Fecha", "Variedad", "Verde (kg)", "Tostado (kg)", "Merma (kg)", "Merma (%)", "Notas"],
     ];
     batches.forEach((b) => {
-      batchRows.push([b.batchDate, b.varietyName || "", b.greenKilos, b.roastedKilos, b.mermaKg, `${b.mermaPct}%`, b.notes || ""]);
+      batchRows.push([b.batchDate, b.varietyName || null, b.greenKilos, b.roastedKilos, b.mermaKg, `${b.mermaPct}%`, b.notes || null]);
     });
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(batchRows), "Tostado");
+    const batchSheet = XLSX.utils.aoa_to_sheet(batchRows);
+    batchSheet["!cols"] = [{ wch: 12 }, { wch: 20 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 30 }];
+    XLSX.utils.book_append_sheet(wb, batchSheet, "Tostado");
 
     const totalGreenIn = entries.reduce((s, e) => s + e.kilos, 0);
     const totalGreenUsed = batches.reduce((s, b) => s + b.greenKilos, 0);
@@ -83,18 +89,17 @@ export default function Reports() {
     const totalMermaKg = Math.round((totalGreenUsed - totalRoasted) * 100) / 100;
     const totalMermaPct = totalGreenUsed > 0 ? Math.round(((totalGreenUsed - totalRoasted) / totalGreenUsed) * 10000) / 100 : 0;
 
-    const resRows: (string | number)[][] = [
-      ["RESUMEN GENERAL"],
-      ["Métrica", "Valor"],
-      ["Total Café Verde Ingresado", totalGreenIn],
-      ["Total Café Verde Usado", totalGreenUsed],
-      ["Total Café Tostado Obtenido", totalRoasted],
-      ["Merma Total (kg)", totalMermaKg],
-      ["Merma Promedio (%)", totalMermaPct],
-      [""],
-      ["DESGLOSE POR VARIEDAD"],
-      ["Variedad", "Verde Ingresado", "Verde Usado", "Disponible", "Tostado", "Merma (kg)", "Merma (%)"],
+    const resRows: (string | number | null)[][] = [
+      ["Métrica", "Valor", "Unidad"],
+      ["Total Café Verde Ingresado", totalGreenIn, "kg"],
+      ["Total Café Verde Usado", totalGreenUsed, "kg"],
+      ["Total Café Tostado Obtenido", totalRoasted, "kg"],
+      ["Merma Total", totalMermaKg, "kg"],
+      ["Merma Promedio", totalMermaPct, "%"],
     ];
+    const resSheet = XLSX.utils.aoa_to_sheet(resRows);
+    resSheet["!cols"] = [{ wch: 30 }, { wch: 14 }, { wch: 8 }];
+    XLSX.utils.book_append_sheet(wb, resSheet, "Resumen");
 
     const varietyMap = new Map(varieties.map((v) => [v.id, v.name]));
     const byVariety: Record<number, { greenIn: number; greenUsed: number; roasted: number }> = {};
@@ -108,15 +113,19 @@ export default function Reports() {
       byVariety[b.varietyId].roasted += b.roastedKilos;
     });
 
+    const detRows: (string | number | null)[][] = [
+      ["Variedad", "Verde Ingresado", "Verde Usado", "Disponible", "Tostado", "Merma (kg)", "Merma (%)"],
+    ];
     Object.entries(byVariety).forEach(([id, data]) => {
       const name = varietyMap.get(Number(id)) || "Desconocida";
       const available = Math.round((data.greenIn - data.greenUsed) * 100) / 100;
       const mermaKg = Math.round((data.greenUsed - data.roasted) * 100) / 100;
       const mermaPct = data.greenUsed > 0 ? Math.round(((data.greenUsed - data.roasted) / data.greenUsed) * 10000) / 100 : 0;
-      resRows.push([name, data.greenIn, data.greenUsed, available, data.roasted, mermaKg, `${mermaPct}%`]);
+      detRows.push([name, data.greenIn, data.greenUsed, available, data.roasted, mermaKg, `${mermaPct}%`]);
     });
-
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(resRows), "Resumen");
+    const detSheet = XLSX.utils.aoa_to_sheet(detRows);
+    detSheet["!cols"] = [{ wch: 24 }, { wch: 15 }, { wch: 13 }, { wch: 12 }, { wch: 13 }, { wch: 13 }, { wch: 12 }];
+    XLSX.utils.book_append_sheet(wb, detSheet, "Desglose");
 
     XLSX.writeFile(wb, `reporte-tostaduria-${new Date().toISOString().split("T")[0]}.xlsx`);
   };
