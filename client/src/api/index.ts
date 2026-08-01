@@ -43,6 +43,23 @@ export const api = {
     create: (data: BatchInput) => request<RoastingBatch>(`/batches`, { method: "POST", body: JSON.stringify(data) }),
     delete: (id: number) => request<{ message: string }>(`/batches/${id}`, { method: "DELETE" }),
   },
+  lots: {
+    list: (params?: { varietyId?: number; from?: string; to?: string }) => {
+      const qs = new URLSearchParams();
+      if (params?.varietyId) qs.set("varietyId", String(params.varietyId));
+      if (params?.from) qs.set("from", params.from);
+      if (params?.to) qs.set("to", params.to);
+      return request<GreenLot[]>(`/lots?${qs.toString()}`);
+    },
+    summary: (varietyId?: number) => {
+      const qs = new URLSearchParams();
+      if (varietyId) qs.set("varietyId", String(varietyId));
+      return request<MeshSummary[]>(`/lots/summary?${qs.toString()}`);
+    },
+    createBatch: (data: { entryId: number; lots: { mesh: Mesh; kilos: number }[]; notes?: string }) =>
+      request<GreenLot[]>("/lots/batch", { method: "POST", body: JSON.stringify(data) }),
+    delete: (id: number) => request<{ message: string }>(`/lots/${id}`, { method: "DELETE" }),
+  },
   inventory: {
     list: () => request<InventoryItem[]>("/inventory"),
   },
@@ -72,6 +89,7 @@ export interface GreenCoffeeEntry {
   supplier: string | null;
   entryDate: string;
   notes: string | null;
+  splitNotes: string | null;
   createdAt: string;
 }
 
@@ -93,6 +111,7 @@ export interface RoastingBatch {
   greenKilos: number;
   roastedKilos: number;
   batchDate: string;
+  mesh: string | null;
   notes: string | null;
   createdAt: string;
 }
@@ -108,7 +127,27 @@ export interface BatchInput {
   greenKilos: number;
   roastedKilos: number;
   batchDate: string;
+  mesh?: string;
   notes?: string;
+}
+
+export type Mesh = "18" | "16" | "14" | "desperdicio";
+
+export interface GreenLot {
+  id: number;
+  entryId: number;
+  varietyId: number;
+  mesh: Mesh;
+  kilos: number;
+  varietyName: string | null;
+  entryDate: string;
+}
+
+export interface MeshSummary {
+  mesh: Mesh;
+  incoming: number;
+  used: number;
+  available: number;
 }
 
 export interface InventoryItem {

@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { db } from "../db/index.js";
+import { db, saveDatabase } from "../db/index.js";
 import { greenCoffeeEntries, varieties } from "../db/schema.js";
 import { eq, desc, sql } from "drizzle-orm";
 
@@ -42,12 +42,14 @@ router.post("/", (req: Request, res: Response) => {
     entryDate,
     notes: notes || null,
   }).returning().get();
+  saveDatabase();
   res.status(201).json(inserted);
 });
 
 router.delete("/:id", (req: Request, res: Response) => {
   const deleted = db.delete(greenCoffeeEntries).where(eq(greenCoffeeEntries.id, Number(req.params.id))).returning().get();
   if (!deleted) { res.status(404).json({ error: "No encontrada" }); return; }
+  saveDatabase();
   res.json({ message: "Eliminada", id: deleted.id });
 });
 

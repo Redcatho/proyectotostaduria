@@ -1,11 +1,19 @@
 import { useEffect, useState, useCallback } from "react";
-import { api, BatchWithVariety, Variety } from "../api";
+import { api, BatchWithVariety, Variety, Mesh, MeshSummary } from "../api";
 import LoadingSpinner from "../components/LoadingSpinner";
 
-type FormState = { varietyId: number; greenKilos: string; roastedKilos: string; batchDate: string; notes: string };
+type FormState = { varietyId: number; mesh: string; greenKilos: string; roastedKilos: string; batchDate: string; notes: string };
+
+const MESH_LABELS: Record<Mesh, string> = {
+  "18": "Malla 18",
+  "16": "Malla 16",
+  "14": "Malla 14",
+  desperdicio: "Desperdicio",
+};
 
 const initialForm = (): FormState => ({
   varietyId: 0,
+  mesh: "",
   greenKilos: "",
   roastedKilos: "",
   batchDate: new Date().toISOString().split("T")[0],
@@ -15,6 +23,7 @@ const initialForm = (): FormState => ({
 export default function Roasting() {
   const [batches, setBatches] = useState<BatchWithVariety[]>([]);
   const [varieties, setVarieties] = useState<Variety[]>([]);
+  const [meshSummary, setMeshSummary] = useState<MeshSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showForm, setShowForm] = useState(false);
@@ -37,6 +46,16 @@ export default function Roasting() {
   useEffect(() => { loadData(); }, [loadData]);
 
   useEffect(() => {
+    if (!form.varietyId) {
+      setMeshSummary([]);
+      return;
+    }
+    api.lots.summary(form.varietyId)
+      .then(setMeshSummary)
+      .catch((err: any) => setError(err.message));
+  }, [form.varietyId]);
+
+  useEffect(() => {
     const green = Number(form.greenKilos);
     const roasted = Number(form.roastedKilos);
     if (green > 0) {
@@ -48,6 +67,10 @@ export default function Roasting() {
     }
   }, [form.greenKilos, form.roastedKilos]);
 
+  const availableByMesh = new Map(meshSummary.map((s) => [s.mesh, s.available]));
+  const selectedAvailable = form.mesh ? availableByMesh.get(form.mesh as Mesh) : undefined;
+  const greenOver = form.mesh && selectedAvailable !== undefined && Number(form.greenKilos) > selectedAvailable;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.varietyId || !form.greenKilos.trim() || !form.roastedKilos.trim() || !form.batchDate) return;
@@ -56,6 +79,7 @@ export default function Roasting() {
         ...form,
         greenKilos: Number(form.greenKilos),
         roastedKilos: Number(form.roastedKilos),
+        mesh: form.mesh || undefined,
       });
       setShowForm(false);
       setForm(initialForm());
@@ -94,6 +118,7 @@ export default function Roasting() {
             <tr>
               <th className="text-left p-3 font-medium">Fecha</th>
               <th className="text-left p-3 font-medium">Variedad</th>
+              <th className="text-left p-3 font-medium">Malla</th>
               <th className="text-right p-3 font-medium">Verde (kg)</th>
               <th className="text-right p-3 font-medium">Tostado (kg)</th>
               <th className="text-right p-3 font-medium">Merma (kg)</th>
@@ -103,12 +128,13 @@ export default function Roasting() {
           </thead>
           <tbody className="divide-y divide-gray-100">
             {batches.length === 0 && (
-              <tr><td colSpan={7} className="p-6 text-center text-gray-400">Sin tandas registradas</td></tr>
+              <tr><td colSpan={8} className="p-6 text-center text-gray-400">Sin tandas registradas</td></tr>
             )}
             {batches.map((b) => (
               <tr key={b.id} className="hover:bg-gray-50">
                 <td className="p-3 text-gray-600">{b.batchDate}</td>
                 <td className="p-3 font-medium text-gray-900">{b.varietyName || "—"}</td>
+                <td className="p-3">{b.mesh ? MESH_LABELS[b.mesh as Mesh] || b.mesh : <span className="text-gray-300">—</span>}</td>
                 <td className="p-3 text-right">{b.greenKilos}</td>
                 <td className="p-3 text-right">{b.roastedKilos}</td>
                 <td className="p-3 text-right text-red-600 font-medium">{b.mermaKg}</td>
@@ -133,11 +159,33 @@ export default function Roasting() {
                   required
                   className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-amber-500 outline-none"
                   value={form.varietyId}
-                  onChange={(e) => setForm({ ...form, varietyId: Number(e.target.value) })}
+                  onChange={(e) => setForm({ ...form, varietyId: Number(e.target.value), mesh: "" })}
                 >
                   <option value="0">Seleccionar...</option>
                   {varieties.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
                 </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Malla (origen del verde)</label>
+                <select
+                  disabled={!form.varietyId}
+                  className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-amber-500 outline-none disabled:bg-gray-50 disabled:text-gray-400"
+                  value={form.mesh}
+                  onChange={(e) => setForm({ ...form, mesh: e.target.value })}
+                >
+                  <option value="">Sin especificar</option>
+                  {(["18", "16", "14", "desperdicio"] as Mesh[]).map((m) => {
+                    const avail = availableByMesh.get(m);
+                    return (
+                      <option key={m} value={m}>
+                        {MESH_LABELS[m]} {avail !== undefined ? `(disponible: ${avail} kg)` : ""}
+                      </option>
+                    );
+                  })}
+                </select>
+                {form.mesh && selectedAvailable !== undefined && (
+                  <p className="text-xs text-gray-500 mt-1">Disponible en {MESH_LABELS[form.mesh as Mesh]}: <strong>{selectedAvailable} kg</strong></p>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -159,6 +207,12 @@ export default function Roasting() {
                   />
                 </div>
               </div>
+
+              {greenOver && (
+                <div className="bg-amber-50 border border-amber-200 text-amber-800 px-3 py-2 rounded-lg text-sm">
+                  El verde indicado supera el disponible de {MESH_LABELS[form.mesh as Mesh]} ({selectedAvailable} kg). Revisa la malla o ajusta el peso.
+                </div>
+              )}
 
               {Number(form.greenKilos) > 0 && (
                 <div className={`p-3 rounded-lg text-sm ${

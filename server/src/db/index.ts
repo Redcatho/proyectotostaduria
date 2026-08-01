@@ -33,6 +33,27 @@ function saveDatabase() {
   }
 }
 
+export { saveDatabase };
+
+function columnExists(table: string, column: string): boolean {
+  const res = sqlJs.exec(`PRAGMA table_info(${table})`);
+  if (!res.length) return false;
+  return res[0].values.some((row) => row[1] === column);
+}
+
+function migrateDatabase() {
+  const migrations: [string, string][] = [
+    ["green_coffee_entries", "split_notes TEXT"],
+    ["roasting_batches", "mesh TEXT"],
+  ];
+  for (const [table, columnDef] of migrations) {
+    const column = columnDef.split(" ")[0];
+    if (!columnExists(table, column)) {
+      sqlJs.run(`ALTER TABLE ${table} ADD COLUMN ${columnDef}`);
+    }
+  }
+}
+
 await getDatabase();
 export const db = drizzle(sqlJs, { schema });
 
@@ -66,11 +87,23 @@ export function initDatabase() {
       green_kilos REAL NOT NULL,
       roasted_kilos REAL NOT NULL,
       batch_date TEXT NOT NULL,
+      mesh TEXT,
       notes TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     )
   `);
 
+  sqlJs.run(`
+    CREATE TABLE IF NOT EXISTS green_lots (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      entry_id INTEGER NOT NULL REFERENCES green_coffee_entries(id) ON DELETE CASCADE,
+      variety_id INTEGER NOT NULL REFERENCES varieties(id) ON DELETE SET NULL,
+      mesh TEXT NOT NULL,
+      kilos REAL NOT NULL
+    )
+  `);
+
+  migrateDatabase();
   saveDatabase();
 }
 

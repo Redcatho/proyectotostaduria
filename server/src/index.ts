@@ -7,6 +7,7 @@ import { initDatabase } from "./db/index.js";
 import varietiesRouter from "./routes/varieties.js";
 import entriesRouter from "./routes/entries.js";
 import batchesRouter from "./routes/batches.js";
+import lotsRouter from "./routes/lots.js";
 import inventoryRouter from "./routes/inventory.js";
 import dashboardRouter from "./routes/dashboard.js";
 
@@ -22,6 +23,7 @@ initDatabase();
 app.use("/api/varieties", varietiesRouter);
 app.use("/api/entries", entriesRouter);
 app.use("/api/batches", batchesRouter);
+app.use("/api/lots", lotsRouter);
 app.use("/api/inventory", inventoryRouter);
 app.use("/api/dashboard", dashboardRouter);
 

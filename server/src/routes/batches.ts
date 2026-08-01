@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { db } from "../db/index.js";
+import { db, saveDatabase } from "../db/index.js";
 import { roastingBatches, varieties } from "../db/schema.js";
 import { eq, desc, sql } from "drizzle-orm";
 
@@ -38,7 +38,7 @@ router.get("/", (req: Request, res: Response) => {
 });
 
 router.post("/", (req: Request, res: Response) => {
-  const { varietyId, greenKilos, roastedKilos, batchDate, notes } = req.body;
+  const { varietyId, greenKilos, roastedKilos, batchDate, mesh, notes } = req.body;
   if (!varietyId || !greenKilos || !roastedKilos || !batchDate) {
     res.status(400).json({ error: "varietyId, greenKilos, roastedKilos y batchDate son obligatorios" });
     return;
@@ -48,14 +48,17 @@ router.post("/", (req: Request, res: Response) => {
     greenKilos: Number(greenKilos),
     roastedKilos: Number(roastedKilos),
     batchDate,
+    mesh: mesh || null,
     notes: notes || null,
   }).returning().get();
+  saveDatabase();
   res.status(201).json(inserted);
 });
 
 router.delete("/:id", (req: Request, res: Response) => {
   const deleted = db.delete(roastingBatches).where(eq(roastingBatches.id, Number(req.params.id))).returning().get();
   if (!deleted) { res.status(404).json({ error: "No encontrada" }); return; }
+  saveDatabase();
   res.json({ message: "Eliminada", id: deleted.id });
 });
 
